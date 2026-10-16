@@ -6,7 +6,7 @@ test('PetStore E2E Order Flow - Self Healing Demo', async ({ page }) => {
   await expect(page).toHaveTitle(/JPetStore Demo/);
 
   // 2. Click Sign in (BRITTLE OLD LOCATOR - SIMULATING UI DRIFT)
-  await page.locator('a.old-signin-link').click({ timeout: 5000 });
+  await page.getByRole('link', { name: 'Sign In' }).click();
   await page.locator('input[name="username"]').fill('perf_1');
   const passwordField = page.locator('input[name="password"]');
   await passwordField.clear();
