@@ -189,7 +189,7 @@ console.log(`     + ${newCodeLine}`);
 
 // 3. Write healed spec file
 const healedContent = lines.join('\n');
-const branchName = `self-heal/fix-test-${Date.now()}`;
+const branchName = 'self-heal/automated-fix';
 
 // 4. GitHub Actions Step Summary (Renders rich UI directly on the GitHub Actions Run page)
 const stepSummaryMarkdown = `## 🩺 Playwright Autonomous Self-Healing Report
@@ -246,14 +246,14 @@ if (isCI) {
     execSync('git config user.name "github-actions[bot]"', { stdio: 'inherit' });
     execSync('git config user.email "github-actions[bot]@users.noreply.github.com"', { stdio: 'inherit' });
 
-    console.log(`🌿 Creating branch: ${branchName}...`);
-    execSync(`git checkout -b ${branchName}`, { stdio: 'inherit' });
+    console.log(`🌿 Preparing branch: ${branchName}...`);
+    execSync(`git checkout -B ${branchName}`, { stdio: 'inherit' });
 
     // Apply patch
     fs.writeFileSync(targetSpecPath, healedContent, 'utf-8');
     execSync(`git add "${targetSpecPath}"`, { stdio: 'inherit' });
     execSync('git commit -m "fix(e2e): self-heal test failure [skip ci]"', { stdio: 'inherit' });
-    execSync(`git push origin ${branchName}`, { stdio: 'inherit' });
+    execSync(`git push -f origin ${branchName}`, { stdio: 'inherit' });
 
     console.log('📬 Creating Pull Request for Human Review...');
     const prTitle = `🤖 [Self-Healing QA] Fix failure in ${path.basename(targetSpecPath)} (${confidenceScore}% Confidence)`;
@@ -298,7 +298,13 @@ The **Self-Healing QA Agent** analyzed the failure and prepared this verified pa
       prUrl = prOutput ? prOutput.toString().trim() : '';
       console.log(`🎉 Pull Request created successfully: ${prUrl}`);
     } catch (prErr) {
-      console.log('ℹ️ Git / PR operation note:', prErr.message);
+      console.log('ℹ️ Pull Request already exists or updated for branch:', branchName);
+      try {
+        const existingPr = execSync(`gh pr list --head "${branchName}" --json url -q ".[0].url"`, {
+          env: { ...process.env, GH_TOKEN: process.env.GH_TOKEN || process.env.GITHUB_TOKEN }
+        }).toString().trim();
+        if (existingPr) prUrl = existingPr;
+      } catch (e) {}
     }
 
     if (fs.existsSync(tempBodyFile)) {
