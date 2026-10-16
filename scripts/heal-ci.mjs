@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 
 const TARGET_SPEC = path.resolve('tests/petstore-broken.spec.ts');
 const REPORT_DIR = path.resolve('healing-reports');
@@ -138,10 +138,24 @@ The **Self-Healing QA Agent** analyzed the failure and prepared this verified pa
 - **Merge this PR** to apply the healed locator to your branch.
 - **Close this PR** to reject the heal.`;
 
-    execSync(`gh pr create --title "${prTitle}" --body "${prBody}" --head ${branchName} --base ${process.env.GITHUB_REF_NAME || 'main'}`, {
+    const tempBodyFile = path.resolve('temp-pr-body.md');
+    fs.writeFileSync(tempBodyFile, prBody, 'utf-8');
+
+    const baseBranch = process.env.GITHUB_REF_NAME || 'main';
+    execFileSync('gh', [
+      'pr', 'create',
+      '--title', prTitle,
+      '--body-file', tempBodyFile,
+      '--head', branchName,
+      '--base', baseBranch
+    ], {
       stdio: 'inherit',
-      env: process.env
+      env: { ...process.env, GH_TOKEN: process.env.GH_TOKEN || process.env.GITHUB_TOKEN }
     });
+
+    if (fs.existsSync(tempBodyFile)) {
+      fs.unlinkSync(tempBodyFile);
+    }
 
     console.log('🎉 Pull Request created successfully! Ready for human approval/rejection.');
   } catch (gitErr) {
