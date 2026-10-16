@@ -130,6 +130,49 @@ else if (
     confidenceScore = 96;
   }
 }
+// Case C: Checkout transition locator drift (e.g. 'Proceed to Checkout')
+else if (
+  (failedLineNumber && lines[failedLineNumber - 1] && (
+    lines[failedLineNumber - 1].includes('checkout') ||
+    lines[failedLineNumber - 1].includes('proceed')
+  )) ||
+  specContent.includes('btn-proceed-checkout-drifted') ||
+  rawErrorMessage.includes('btn-proceed-checkout-drifted')
+) {
+  const lineIdx = (failedLineNumber && failedLineNumber <= lines.length)
+    ? failedLineNumber - 1
+    : lines.findIndex(l => l.includes('btn-proceed-checkout-drifted'));
+
+  if (lineIdx !== -1) {
+    oldCodeLine = lines[lineIdx].trim();
+    const replacement = "await page.getByRole('link', { name: 'Proceed to Checkout' }).click();";
+    newCodeLine = replacement;
+    lines[lineIdx] = lines[lineIdx].replace(/await page\.(getByRole|locator)\(.*?\)\.click\(.*?\);?/, replacement);
+    healingRationale = `Broken locator on line ${lineIdx + 1} timed out during checkout transition. Upgraded to resilient Playwright P1 Accessible Locator: page.getByRole('link', { name: 'Proceed to Checkout' }).`;
+    confidenceScore = 97;
+  }
+}
+// Case D: Confirm order button locator drift
+else if (
+  (failedLineNumber && lines[failedLineNumber - 1] && (
+    lines[failedLineNumber - 1].includes('confirm')
+  )) ||
+  specContent.includes('confirm-order') ||
+  rawErrorMessage.includes('confirm-order')
+) {
+  const lineIdx = (failedLineNumber && failedLineNumber <= lines.length)
+    ? failedLineNumber - 1
+    : lines.findIndex(l => l.includes('confirm'));
+
+  if (lineIdx !== -1) {
+    oldCodeLine = lines[lineIdx].trim();
+    const replacement = "await page.getByRole('link', { name: 'Confirm' }).click();";
+    newCodeLine = replacement;
+    lines[lineIdx] = lines[lineIdx].replace(/await page\.(getByRole|locator)\(.*?\)\.click\(.*?\);?/, replacement);
+    healingRationale = `Broken locator on line ${lineIdx + 1} timed out during order confirmation. Upgraded to resilient Playwright P1 Accessible Locator: page.getByRole('link', { name: 'Confirm' }).`;
+    confidenceScore = 97;
+  }
+}
 
 if (!oldCodeLine || !newCodeLine) {
   console.log('⚠️ Healing engine could not automatically formulate a high-confidence patch.');
@@ -349,7 +392,7 @@ async function sendTeamsNotification({ prUrl, targetSpec, confidenceScore, heali
                 { "title": "Spec File:", "value": targetSpec },
                 { "title": "Workflow Run:", "value": `#${runNumber}` },
                 { "title": "Confidence:", "value": `${confidenceScore}% (High Confidence)` },
-                { "title": "Status:", "value": "Waiting for QA Review" }
+                { "title": "Status:", "value": "🟡 Action Required: Pending Approval" }
               ]
             },
             {
@@ -377,12 +420,12 @@ async function sendTeamsNotification({ prUrl, targetSpec, confidenceScore, heali
           "actions": [
             {
               "type": "Action.OpenUrl",
-              "title": "👉 Review & Merge PR on GitHub",
+              "title": "✅ Approve & Merge Fix (Open PR)",
               "url": fallbackPrUrl
             },
             {
               "type": "Action.OpenUrl",
-              "title": "📊 View GitHub Actions Run",
+              "title": "🔍 View CI Failure Logs",
               "url": runUrl
             }
           ]
