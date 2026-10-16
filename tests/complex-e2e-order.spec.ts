@@ -42,7 +42,7 @@ test('Complex E2E PetStore Checkout Transaction Flow', async ({ page }) => {
   // ❌ SIMULATING REAL-WORLD FRONTEND REDESIGN / LOCATOR DRIFT:
   // A legacy CSS locator 'a.btn-proceed-checkout-drifted' broke after UI refactor
   // --------------------------------------------------------------------------
-  await page.locator('a.btn-proceed-checkout-drifted').click({ timeout: 5000 });
+  await page.getByRole('link', { name: 'Proceed to Checkout' }).click();
   await expect(page.locator('#Catalog')).toContainText('Payment Details');
 
   // --------------------------------------------------------------------------
