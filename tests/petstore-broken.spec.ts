@@ -38,7 +38,7 @@ test('PetStore E2E Order Flow - Self Healing Demo', async ({ page }) => {
 
   // 8. Click Confirm
   await page.getByRole('link', { name: 'Confirm' }).click();
-  await expect(page.locator('#Catalog')).toContainText(/Order #d+/);
+  await expect(page.locator('#Catalog')).toContainText(/Order #\d+/);
 
   // 9. Click Sign out
   await page.getByRole('link', { name: 'Sign Out' }).click();
