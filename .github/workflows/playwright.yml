@@ -41,6 +41,7 @@ jobs:
         CI: true
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
         GITHUB_ACTIONS: true
       run: node scripts/heal-ci.mjs
 

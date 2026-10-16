@@ -222,29 +222,171 @@ The **Self-Healing QA Agent** analyzed the failure and prepared this verified pa
     const tempBodyFile = path.resolve('temp-pr-body.md');
     fs.writeFileSync(tempBodyFile, prBody, 'utf-8');
 
-    const baseBranch = process.env.GITHUB_REF_NAME || 'main';
-    execFileSync('gh', [
-      'pr', 'create',
-      '--title', prTitle,
-      '--body-file', tempBodyFile,
-      '--head', branchName,
-      '--base', baseBranch
-    ], {
-      stdio: 'inherit',
-      env: { ...process.env, GH_TOKEN: process.env.GH_TOKEN || process.env.GITHUB_TOKEN }
-    });
+    let prUrl = '';
+    try {
+      const prOutput = execFileSync('gh', [
+        'pr', 'create',
+        '--title', prTitle,
+        '--body-file', tempBodyFile,
+        '--head', branchName,
+        '--base', baseBranch
+      ], {
+        stdio: 'pipe',
+        env: { ...process.env, GH_TOKEN: process.env.GH_TOKEN || process.env.GITHUB_TOKEN }
+      });
+      prUrl = prOutput ? prOutput.toString().trim() : '';
+      console.log(`🎉 Pull Request created successfully: ${prUrl}`);
+    } catch (prErr) {
+      console.log('ℹ️ Git / PR operation note:', prErr.message);
+    }
 
     if (fs.existsSync(tempBodyFile)) {
       fs.unlinkSync(tempBodyFile);
     }
 
-    console.log('🎉 Pull Request created successfully! Ready for human approval/rejection.');
+    // 6. Send Microsoft Teams Adaptive Card Notification
+    await sendTeamsNotification({
+      prUrl,
+      targetSpec: path.relative(process.cwd(), targetSpecPath),
+      confidenceScore,
+      healingRationale,
+      oldCodeLine,
+      newCodeLine
+    });
+
   } catch (gitErr) {
     console.log('ℹ️ Git / PR operation note:', gitErr.message);
   }
 } else {
   console.log('\n💡 Local Simulation Notice:');
-  console.log('   In GitHub Actions CI, this step automatically creates the PR with Merge/Close buttons.');
+  console.log('   In GitHub Actions CI, this step automatically creates the PR and dispatches the Teams Card.');
+  
+  // Also send Teams card if TEAMS_WEBHOOK_URL is set locally for testing
+  if (process.env.TEAMS_WEBHOOK_URL) {
+    await sendTeamsNotification({
+      prUrl: 'https://github.com/jeswnath/testPlaywright/pulls',
+      targetSpec: path.relative(process.cwd(), targetSpecPath),
+      confidenceScore,
+      healingRationale,
+      oldCodeLine,
+      newCodeLine
+    });
+  }
+}
+
+// Helper: Post Adaptive Card to Microsoft Teams
+async function sendTeamsNotification({ prUrl, targetSpec, confidenceScore, healingRationale, oldCodeLine, newCodeLine }) {
+  const webhookUrl = process.env.TEAMS_WEBHOOK_URL;
+  if (!webhookUrl) {
+    console.log('\n💡 Microsoft Teams Notification:');
+    console.log('   TEAMS_WEBHOOK_URL secret is not set.');
+    console.log('   To receive real-time Cards in Teams: Add TEAMS_WEBHOOK_URL in GitHub repo Secrets.');
+    return;
+  }
+
+  console.log('\n📢 STEP 4: SENDING INTERACTIVE ADAPTIVE CARD TO MICROSOFT TEAMS...');
+
+  const repoName = process.env.GITHUB_REPOSITORY || 'jeswnath/testPlaywright';
+  const runNumber = process.env.GITHUB_RUN_NUMBER || 'Local';
+  const runUrl = process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
+    ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+    : prUrl || `https://github.com/${repoName}/actions`;
+
+  const fallbackPrUrl = prUrl || `https://github.com/${repoName}/pulls`;
+
+  const teamsPayload = {
+    "type": "message",
+    "attachments": [
+      {
+        "contentType": "application/vnd.microsoft.card.adaptive",
+        "contentUrl": null,
+        "content": {
+          "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+          "type": "AdaptiveCard",
+          "version": "1.4",
+          "body": [
+            {
+              "type": "Container",
+              "style": "emphasis",
+              "items": [
+                {
+                  "type": "TextBlock",
+                  "text": "🩺 AUTONOMOUS SELF-HEALING PR CREATED",
+                  "weight": "Bolder",
+                  "size": "Medium",
+                  "color": "Good"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "Playwright CI Failure Intercepted & Patch Prepared",
+                  "isSubtle": true,
+                  "spacing": "None"
+                }
+              ]
+            },
+            {
+              "type": "FactSet",
+              "facts": [
+                { "title": "Repository:", "value": repoName },
+                { "title": "Spec File:", "value": targetSpec },
+                { "title": "Workflow Run:", "value": `#${runNumber}` },
+                { "title": "Confidence:", "value": `${confidenceScore}% (High Confidence)` },
+                { "title": "Status:", "value": "Waiting for QA Review" }
+              ]
+            },
+            {
+              "type": "TextBlock",
+              "text": `**Diagnosis:** ${healingRationale}`,
+              "wrap": true
+            },
+            {
+              "type": "Container",
+              "items": [
+                {
+                  "type": "TextBlock",
+                  "text": "🔍 Proposed Code Diff",
+                  "weight": "Bolder"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": `- ${oldCodeLine}\n+ ${newCodeLine}`,
+                  "fontType": "Monospace",
+                  "wrap": true
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "type": "Action.OpenUrl",
+              "title": "👉 Review & Merge PR on GitHub",
+              "url": fallbackPrUrl
+            },
+            {
+              "type": "Action.OpenUrl",
+              "title": "📊 View GitHub Actions Run",
+              "url": runUrl
+            }
+          ]
+        }
+      }
+    ]
+  };
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(teamsPayload)
+    });
+    if (res.ok) {
+      console.log('✅ Successfully posted Adaptive Card to Microsoft Teams Channel!');
+    } else {
+      console.warn(`⚠️ Teams Webhook returned status: ${res.status}`);
+    }
+  } catch (err) {
+    console.warn('⚠️ Could not post to Teams webhook:', err.message);
+  }
 }
 
 console.log('\n================================================================================');
