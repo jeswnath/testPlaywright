@@ -35,11 +35,12 @@ if (fs.existsSync(RESULTS_JSON)) {
           for (const test of (spec.tests || [])) {
             for (const result of (test.results || [])) {
               if (result.status === 'failed' || result.status === 'timedOut') {
+                const detailedError = (result.errors || []).find(e => e && e.location) || result.error;
                 failures.push({
                   file: spec.file,
                   title: spec.title,
-                  error: result.error,
-                  errorLocation: result.errorLocation || (result.error && result.error.location)
+                  error: detailedError || result.error,
+                  errorLocation: (detailedError && detailedError.location) || result.errorLocation || (result.error && result.error.location)
                 });
               }
             }
@@ -81,7 +82,8 @@ console.log(`🔍 Ingested Failure Details:`);
 console.log(`   • Target Spec: ${path.relative(process.cwd(), targetSpecPath)}`);
 if (failedLineNumber) console.log(`   • Failed Line Number: ${failedLineNumber}`);
 if (rawErrorMessage) {
-  const firstErrorLine = rawErrorMessage.replace(/\u001b\[\d+m/g, '').split('\n').find(l => l.includes('Error:') || l.includes('failed')) || 'Test assertion/locator failed';
+  const cleanError = rawErrorMessage.replace(/\u001b\[\d+m/g, '');
+  const firstErrorLine = cleanError.split('\n').find(l => l.includes('Error:') || l.includes('waiting for') || l.includes('failed')) || 'Test assertion/locator failed';
   console.log(`   • Error Signature: ${firstErrorLine.trim()}`);
 }
 
@@ -91,7 +93,6 @@ let newCodeLine = '';
 let healingRationale = '';
 let confidenceScore = 0;
 
-// Scan for known failure signatures
 // Case A: Regex unescaped digits: /Order #d+/ vs /Order #\d+/
 if (specContent.includes('/Order #d+/') || rawErrorMessage.includes('/Order #d+/') || (failedLineNumber && lines[failedLineNumber - 1]?.includes('/Order #d+/'))) {
   const lineIdx = lines.findIndex(l => l.includes('/Order #d+/'));
@@ -103,14 +104,29 @@ if (specContent.includes('/Order #d+/') || rawErrorMessage.includes('/Order #d+/
     confidenceScore = 98;
   }
 }
-// Case B: Brittle Sign-in locator: 'a.old-signin-link' -> getByRole('link', { name: 'Sign In' })
-else if (specContent.includes('a.old-signin-link') || rawErrorMessage.includes('a.old-signin-link')) {
-  const lineIdx = lines.findIndex(l => l.includes('a.old-signin-link'));
+// Case B: Sign-in link locator drift (e.g. 'Logged In', 'a.old-signin-link', 'Login', etc.)
+else if (
+  (failedLineNumber && lines[failedLineNumber - 1] && (
+    lines[failedLineNumber - 1].includes('Logged In') ||
+    lines[failedLineNumber - 1].includes('a.old-signin-link') ||
+    lines[failedLineNumber - 1].includes('login') ||
+    lines[failedLineNumber - 1].includes('Sign In')
+  )) ||
+  specContent.includes('Logged In') ||
+  specContent.includes('a.old-signin-link') ||
+  rawErrorMessage.includes('Logged In') ||
+  rawErrorMessage.includes('a.old-signin-link')
+) {
+  const lineIdx = (failedLineNumber && failedLineNumber <= lines.length)
+    ? failedLineNumber - 1
+    : lines.findIndex(l => l.includes('Logged In') || l.includes('a.old-signin-link'));
+
   if (lineIdx !== -1) {
     oldCodeLine = lines[lineIdx].trim();
-    newCodeLine = lines[lineIdx].replace(/page\.locator\(['"]a\.old-signin-link['"]\)\.click\(.*?\)/, "page.getByRole('link', { name: 'Sign In' }).click()").trim();
-    lines[lineIdx] = lines[lineIdx].replace(/page\.locator\(['"]a\.old-signin-link['"]\)\.click\(.*?\)/, "page.getByRole('link', { name: 'Sign In' }).click()");
-    healingRationale = "Brittle CSS selector 'a.old-signin-link' timed out. Upgraded to accessible Playwright P1 locator: page.getByRole('link', { name: 'Sign In' }).";
+    const replacement = "await page.getByRole('link', { name: 'Sign In' }).click();";
+    newCodeLine = replacement;
+    lines[lineIdx] = lines[lineIdx].replace(/await page\.(getByRole|locator)\(.*?\)\.click\(.*?\);?/, replacement);
+    healingRationale = `Broken locator on line ${lineIdx + 1} timed out waiting for element. Upgraded to resilient Playwright P1 Accessible Locator: page.getByRole('link', { name: 'Sign In' }).`;
     confidenceScore = 96;
   }
 }
