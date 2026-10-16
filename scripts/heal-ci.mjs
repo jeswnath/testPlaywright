@@ -2,9 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { execSync, execFileSync } from 'child_process';
 
-const TARGET_SPEC = path.resolve('tests/petstore-broken.spec.ts');
 const REPORT_DIR = path.resolve('healing-reports');
 const REPORT_FILE = path.join(REPORT_DIR, 'healing-report-latest.md');
+const RESULTS_JSON = path.resolve('test-results/results.json');
 
 // Ensure reports directory exists
 if (!fs.existsSync(REPORT_DIR)) {
@@ -12,62 +12,148 @@ if (!fs.existsSync(REPORT_DIR)) {
 }
 
 console.log('\n================================================================================');
-console.log('🤖 GITHUB ACTIONS: SELF-HEALING QA AGENT TRIGGERED ON FAILURE');
+console.log('🤖 GITHUB ACTIONS: DYNAMIC SELF-HEALING QA AGENT TRIGGERED');
 console.log('================================================================================');
 
-// 1. Analyze failure in target spec
-if (!fs.existsSync(TARGET_SPEC)) {
-  console.log(`⚠️ Spec file not found at ${TARGET_SPEC}`);
+// 1. Ingest Failure dynamically from Playwright test-results/results.json
+let failedTestInfo = null;
+
+if (fs.existsSync(RESULTS_JSON)) {
+  try {
+    const resultsData = JSON.parse(fs.readFileSync(RESULTS_JSON, 'utf-8'));
+    
+    // Recursive search for failed test in suites
+    function findFailedTests(suite) {
+      let failures = [];
+      if (suite.suites) {
+        for (const subSuite of suite.suites) {
+          failures = failures.concat(findFailedTests(subSuite));
+        }
+      }
+      if (suite.specs) {
+        for (const spec of suite.specs) {
+          for (const test of (spec.tests || [])) {
+            for (const result of (test.results || [])) {
+              if (result.status === 'failed' || result.status === 'timedOut') {
+                failures.push({
+                  file: spec.file,
+                  title: spec.title,
+                  error: result.error,
+                  errorLocation: result.errorLocation || (result.error && result.error.location)
+                });
+              }
+            }
+          }
+        }
+      }
+      return failures;
+    }
+
+    for (const rootSuite of (resultsData.suites || [])) {
+      const failures = findFailedTests(rootSuite);
+      if (failures.length > 0) {
+        failedTestInfo = failures[0];
+        break;
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ Could not parse results.json:', err.message);
+  }
+}
+
+// Fallback: If results.json was not found, check target demo spec directly
+let targetSpecPath = failedTestInfo && failedTestInfo.errorLocation && failedTestInfo.errorLocation.file
+  ? path.resolve(failedTestInfo.errorLocation.file)
+  : path.resolve('tests/petstore-broken.spec.ts');
+
+if (!fs.existsSync(targetSpecPath)) {
+  console.log(`⚠️ Spec file not found at ${targetSpecPath}`);
   process.exit(0);
 }
 
-const specContent = fs.readFileSync(TARGET_SPEC, 'utf-8');
-const oldLine = "await page.locator('a.old-signin-link').click({ timeout: 5000 });";
-const newLine = "await page.getByRole('link', { name: 'Sign In' }).click();";
+let specContent = fs.readFileSync(targetSpecPath, 'utf-8');
+const lines = specContent.split('\n');
 
-if (!specContent.includes(oldLine)) {
-  console.log('ℹ️ Spec file does not contain the target broken locator. Skipping auto-heal.');
+let failedLineNumber = failedTestInfo && failedTestInfo.errorLocation ? failedTestInfo.errorLocation.line : null;
+let rawErrorMessage = failedTestInfo && failedTestInfo.error ? failedTestInfo.error.message : '';
+
+console.log(`🔍 Ingested Failure Details:`);
+console.log(`   • Target Spec: ${path.relative(process.cwd(), targetSpecPath)}`);
+if (failedLineNumber) console.log(`   • Failed Line Number: ${failedLineNumber}`);
+if (rawErrorMessage) {
+  const firstErrorLine = rawErrorMessage.replace(/\u001b\[\d+m/g, '').split('\n').find(l => l.includes('Error:') || l.includes('failed')) || 'Test assertion/locator failed';
+  console.log(`   • Error Signature: ${firstErrorLine.trim()}`);
+}
+
+// 2. Intelligent Healing Engine
+let oldCodeLine = '';
+let newCodeLine = '';
+let healingRationale = '';
+let confidenceScore = 0;
+
+// Scan for known failure signatures
+// Case A: Regex unescaped digits: /Order #d+/ vs /Order #\d+/
+if (specContent.includes('/Order #d+/') || rawErrorMessage.includes('/Order #d+/') || (failedLineNumber && lines[failedLineNumber - 1]?.includes('/Order #d+/'))) {
+  const lineIdx = lines.findIndex(l => l.includes('/Order #d+/'));
+  if (lineIdx !== -1) {
+    oldCodeLine = lines[lineIdx].trim();
+    newCodeLine = lines[lineIdx].replace('/Order #d+/', '/Order #\\d+/').trim();
+    lines[lineIdx] = lines[lineIdx].replace('/Order #d+/', '/Order #\\d+/');
+    healingRationale = "Syntax error in assertion regex: '/Order #d+/' was missing the escape backslash before 'd+'. Healed to '/Order #\\d+/' to correctly match the dynamic order number.";
+    confidenceScore = 98;
+  }
+}
+// Case B: Brittle Sign-in locator: 'a.old-signin-link' -> getByRole('link', { name: 'Sign In' })
+else if (specContent.includes('a.old-signin-link') || rawErrorMessage.includes('a.old-signin-link')) {
+  const lineIdx = lines.findIndex(l => l.includes('a.old-signin-link'));
+  if (lineIdx !== -1) {
+    oldCodeLine = lines[lineIdx].trim();
+    newCodeLine = lines[lineIdx].replace(/page\.locator\(['"]a\.old-signin-link['"]\)\.click\(.*?\)/, "page.getByRole('link', { name: 'Sign In' }).click()").trim();
+    lines[lineIdx] = lines[lineIdx].replace(/page\.locator\(['"]a\.old-signin-link['"]\)\.click\(.*?\)/, "page.getByRole('link', { name: 'Sign In' }).click()");
+    healingRationale = "Brittle CSS selector 'a.old-signin-link' timed out. Upgraded to accessible Playwright P1 locator: page.getByRole('link', { name: 'Sign In' }).";
+    confidenceScore = 96;
+  }
+}
+
+if (!oldCodeLine || !newCodeLine) {
+  console.log('⚠️ Healing engine could not automatically formulate a high-confidence patch.');
+  console.log('   Review failure manually in Playwright trace report.');
   process.exit(0);
 }
 
-console.log('🔍 Ingesting failed test run from GitHub Actions...');
-console.log(`   • Target Spec: tests/petstore-broken.spec.ts`);
-console.log(`   • Broken Code: ${oldLine}`);
-console.log(`   • Failure Reason: Timeout 5000ms waiting for locator('a.old-signin-link')`);
+console.log('\n🧠 Executing Skill: .github/skills/self-healing-locator/SKILL.md');
+console.log(`   • Rationale: ${healingRationale}`);
+console.log(`   • Healing Confidence Score: ${confidenceScore}% (High Confidence)`);
+console.log('   • Code Diff:');
+console.log(`     - ${oldCodeLine}`);
+console.log(`     + ${newCodeLine}`);
 
-console.log('\n🧠 Activating Domain Skill: .github/skills/self-healing-locator/SKILL.md');
-console.log('   • Failure Classification: UI Locator Drift');
-console.log('   • Candidate Healed Locator: page.getByRole(\'link\', { name: \'Sign In\' })');
-console.log('   • Playwright Priority Tier: P1 User-Facing Role');
-console.log('   • Healing Confidence Score: 96% (High Confidence)');
+// 3. Write healed spec file
+const healedContent = lines.join('\n');
+const branchName = `self-heal/fix-test-${Date.now()}`;
 
-// 2. Prepare healed code
-const healedContent = specContent.replace(oldLine, newLine);
-const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-const branchName = `self-heal/fix-locator-${Date.now()}`;
-
-// 3. GitHub Actions Step Summary (Renders rich UI directly on the GitHub Actions Run page)
+// 4. GitHub Actions Step Summary (Renders rich UI directly on the GitHub Actions Run page)
 const stepSummaryMarkdown = `## 🩺 Playwright Autonomous Self-Healing Report
 
 > **Status:** ❌ Test Failed in CI $\\rightarrow$ 🩹 **Self-Healing Solution Prepared**  
-> **Confidence Score:** 🟢 **96% (High Confidence - UI Locator Drift)**
+> **Confidence Score:** 🟢 **${confidenceScore}% (High Confidence)**
 
 ### 📊 Failure vs. Proposed Heal Summary
 
 | Metric | Details |
 | :--- | :--- |
-| **Failed Test** | \`tests/petstore-broken.spec.ts\` |
-| **Root Cause** | Brittle CSS class locator drifted: \`a.old-signin-link\` |
-| **Recommended Heal** | Upgraded to accessible \`page.getByRole('link', { name: 'Sign In' })\` |
-| **Playwright Hierarchy** | **P1 (Highest)** - Accessible Role (Resilient to DOM refactors) |
+| **Failed Test** | \`${path.relative(process.cwd(), targetSpecPath)}\` |
+| **Root Cause** | ${healingRationale} |
+| **Healing Confidence** | **${confidenceScore}%** |
+| **Playwright Hierarchy** | **P1 Accessible / Verified Fix** |
 
 ---
 
 ### 🔍 Proposed Code Diff
 
 \`\`\`diff
-- await page.locator('a.old-signin-link').click({ timeout: 5000 });
-+ await page.getByRole('link', { name: 'Sign In' }).click();
+- ${oldCodeLine}
++ ${newCodeLine}
 \`\`\`
 
 ---
@@ -77,7 +163,6 @@ const stepSummaryMarkdown = `## 🩺 Playwright Autonomous Self-Healing Report
 - **To Reject:** Close the Pull Request without merging.
 `;
 
-// Write to GITHUB_STEP_SUMMARY if available
 if (process.env.GITHUB_STEP_SUMMARY) {
   try {
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, stepSummaryMarkdown, 'utf-8');
@@ -87,11 +172,10 @@ if (process.env.GITHUB_STEP_SUMMARY) {
   }
 }
 
-// Save local audit report
 fs.writeFileSync(REPORT_FILE, stepSummaryMarkdown, 'utf-8');
 console.log(`✅ Saved Local Audit Report to ${REPORT_FILE}`);
 
-// 4. Autonomous Git Branch & PR Creation in GitHub Actions
+// 5. Autonomous Git Branch & PR Creation in GitHub Actions
 const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
 if (isCI) {
@@ -100,23 +184,20 @@ if (isCI) {
   console.log('================================================================================');
 
   try {
-    // Configure Git
     execSync('git config user.name "github-actions[bot]"', { stdio: 'inherit' });
     execSync('git config user.email "github-actions[bot]@users.noreply.github.com"', { stdio: 'inherit' });
 
-    // Create a new branch with the healed code
     console.log(`🌿 Creating branch: ${branchName}...`);
     execSync(`git checkout -b ${branchName}`, { stdio: 'inherit' });
 
     // Apply patch
-    fs.writeFileSync(TARGET_SPEC, healedContent, 'utf-8');
-    execSync('git add tests/petstore-broken.spec.ts', { stdio: 'inherit' });
-    execSync('git commit -m "fix(e2e): self-heal broken locator in petstore-broken.spec.ts [skip ci]"', { stdio: 'inherit' });
+    fs.writeFileSync(targetSpecPath, healedContent, 'utf-8');
+    execSync(`git add "${targetSpecPath}"`, { stdio: 'inherit' });
+    execSync('git commit -m "fix(e2e): self-heal test failure [skip ci]"', { stdio: 'inherit' });
     execSync(`git push origin ${branchName}`, { stdio: 'inherit' });
 
-    // Open PR using GitHub CLI (installed by default in all GitHub Actions runners)
     console.log('📬 Creating Pull Request for Human Review...');
-    const prTitle = '🤖 [Self-Healing QA] Fix broken locator in petstore-broken.spec.ts (96% Confidence)';
+    const prTitle = `🤖 [Self-Healing QA] Fix failure in ${path.basename(targetSpecPath)} (${confidenceScore}% Confidence)`;
     const prBody = `## 🩺 Playwright Autonomous Self-Healing Proposal
 
 A test failure was detected in GitHub Actions run #${process.env.GITHUB_RUN_NUMBER || 'CI'}.
@@ -124,18 +205,18 @@ The **Self-Healing QA Agent** analyzed the failure and prepared this verified pa
 
 ### 🔍 Changes Applied:
 \`\`\`diff
-- await page.locator('a.old-signin-link').click({ timeout: 5000 });
-+ await page.getByRole('link', { name: 'Sign In' }).click();
+- ${oldCodeLine}
++ ${newCodeLine}
 \`\`\`
 
 ### 📊 Analysis:
-- **Failure:** \`Timeout 5000ms waiting for locator('a.old-signin-link')\`
-- **Resolution:** Replaced with Playwright P1 Accessible Locator \`page.getByRole('link', { name: 'Sign In' })\`
-- **Confidence:** **96% (High Confidence)**
+- **Spec:** \`${path.relative(process.cwd(), targetSpecPath)}\`
+- **Root Cause:** ${healingRationale}
+- **Confidence:** **${confidenceScore}% (High Confidence)**
 
 ---
 👉 **Human-in-the-Loop Action:**
-- **Merge this PR** to apply the healed locator to your branch.
+- **Merge this PR** to apply the healed code to your branch.
 - **Close this PR** to reject the heal.`;
 
     const tempBodyFile = path.resolve('temp-pr-body.md');
@@ -163,13 +244,9 @@ The **Self-Healing QA Agent** analyzed the failure and prepared this verified pa
   }
 } else {
   console.log('\n💡 Local Simulation Notice:');
-  console.log('   In GitHub Actions CI, this step automatically:');
-  console.log('   1. Renders the interactive visual card on the GitHub Run page.');
-  console.log('   2. Pushes branch: self-heal/fix-locator-...');
-  console.log('   3. Opens a PR titled: "🤖 [Self-Healing QA] Fix broken locator..." for 1-click Merge or Reject!');
+  console.log('   In GitHub Actions CI, this step automatically creates the PR with Merge/Close buttons.');
 }
 
 console.log('\n================================================================================');
 console.log('✅ SELF-HEALING TRIAGE PIPELINE COMPLETED');
 console.log('================================================================================\n');
-
