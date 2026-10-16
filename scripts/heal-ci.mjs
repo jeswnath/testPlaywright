@@ -238,6 +238,8 @@ The **Self-Healing QA Agent** analyzed the failure and prepared this verified pa
     const tempBodyFile = path.resolve('temp-pr-body.md');
     fs.writeFileSync(tempBodyFile, prBody, 'utf-8');
 
+    const baseBranch = process.env.GITHUB_BASE_REF || process.env.GITHUB_REF_NAME || 'main';
+
     let prUrl = '';
     try {
       const prOutput = execFileSync('gh', [
