@@ -37,7 +37,7 @@ test('Complex E2E PetStore Checkout Transaction Flow', async ({ page }) => {
   // Both rows contain an identical "Add to Cart" link.
   // Downstream assertions require EST-2 (Small Angelfish).
   // --------------------------------------------------------------------------
-  await page.getByRole('link', { name: 'Add to Cart' }).click();
+  await page.getByRole('link', { name: 'Add to Cart' }).nth(1).click();
   await expect(page.getByRole('heading', { name: 'Shopping Cart' })).toBeVisible();
   await expect(page.locator('#Catalog')).toContainText('EST-2');
   await expect(page.locator('#Catalog')).toContainText('Small Angelfish');
