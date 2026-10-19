@@ -10,6 +10,8 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  pages: write
+  id-token: write
 
 jobs:
   test:
@@ -56,10 +58,11 @@ jobs:
         path: playwright-report/
         retention-days: 30
 
-    - name: Upload Raw Videos, Screenshots & Traces
-      uses: actions/upload-artifact@v4
+    - name: 🌐 Deploy Live Playwright HTML Report to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v4
       if: ${{ !cancelled() }}
       with:
-        name: test-videos-and-traces
-        path: test-results/
-        retention-days: 30
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./playwright-report
+        user_name: 'github-actions[bot]'
+        user_email: 'github-actions[bot]@users.noreply.github.com'
