@@ -54,28 +54,36 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         teams-webhook: ${{ secrets.TEAMS_WEBHOOK_URL }}
 
-    - name: Upload Playwright HTML Report
-      uses: actions/upload-artifact@v4
-      if: ${{ !cancelled() }}
-      with:
-        name: playwright-report
-        path: playwright-report/
-        retention-days: 30
-
-    - name: 🌐 Deploy Live Playwright HTML Report to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v4
-      if: ${{ !cancelled() }}
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./playwright-report
-        user_name: 'github-actions[bot]'
-        user_email: 'github-actions[bot]@users.noreply.github.com'
-
-    - name: 📢 Display Live Report Link in Run Summary
+    - name: 🌐 Live Playwright Report (https://jeswnath.github.io/testPlaywright/)
       if: ${{ !cancelled() }}
       run: |
-        echo "::notice title=🌐 Live Playwright Report Available::https://jeswnath.github.io/testPlaywright/"
+        if [ -d "playwright-report" ]; then
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          TEMP_PAGES=$(mktemp -d)
+          cp -r playwright-report/* "$TEMP_PAGES/"
+          touch "$TEMP_PAGES/.nojekyll"
+          
+          git checkout --orphan gh-pages-temp 2>/dev/null || git checkout -B gh-pages-temp
+          git rm -rf . >/dev/null 2>&1 || true
+          cp -r "$TEMP_PAGES"/* .
+          rm -rf "$TEMP_PAGES"
+          
+          git add -A
+          git commit -m "deploy: update live Playwright HTML report [skip ci]" --quiet
+          git push -f https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git gh-pages-temp:gh-pages --quiet
+          git checkout -f -
+        fi
+        
+        echo "::notice title=🌐 Live Playwright Report::https://jeswnath.github.io/testPlaywright/"
         echo "## 🌐 Live Playwright Test Report" >> $GITHUB_STEP_SUMMARY
-        echo "> 🚀 **[Click Here to Open the Live Interactive Playwright Report](https://jeswnath.github.io/testPlaywright/)**" >> $GITHUB_STEP_SUMMARY
+        echo "> 🚀 **[Click Here to Open the Live Playwright HTML Report](https://jeswnath.github.io/testPlaywright/)**" >> $GITHUB_STEP_SUMMARY
         echo "> *(Includes full interactive Trace Viewer, Videos, and Step-by-Step Screenshots)*" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo ""
+        echo "================================================================================"
+        echo "🌐 LIVE PLAYWRIGHT REPORT: https://jeswnath.github.io/testPlaywright/"
+        echo "================================================================================"
+        echo "✅ Report published cleanly to GitHub Pages."
