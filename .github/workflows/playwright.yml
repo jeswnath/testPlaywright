@@ -58,22 +58,24 @@ jobs:
       if: ${{ !cancelled() }}
       run: |
         if [ -d "playwright-report" ]; then
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          TEMP_PAGES=$(mktemp -d)
-          cp -r playwright-report/* "$TEMP_PAGES/"
-          touch "$TEMP_PAGES/.nojekyll"
+          CLONE_DIR=$(mktemp -d)
+          git clone --depth 1 --branch gh-pages "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" "$CLONE_DIR" 2>/dev/null || {
+            mkdir -p "$CLONE_DIR"
+            git -C "$CLONE_DIR" init -b gh-pages
+            git -C "$CLONE_DIR" remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          }
           
-          git checkout --orphan gh-pages-temp 2>/dev/null || git checkout -B gh-pages-temp
-          git rm -rf . >/dev/null 2>&1 || true
-          cp -r "$TEMP_PAGES"/* .
-          rm -rf "$TEMP_PAGES"
+          rm -rf "$CLONE_DIR"/*
+          cp -r playwright-report/* "$CLONE_DIR/"
+          touch "$CLONE_DIR/.nojekyll"
           
-          git add -A
-          git commit -m "deploy: update live Playwright HTML report [skip ci]" --quiet
-          git push -f https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git gh-pages-temp:gh-pages --quiet
-          git checkout -f -
+          git -C "$CLONE_DIR" add -A
+          git -C "$CLONE_DIR" commit -m "deploy: update live Playwright HTML report [skip ci]" --quiet || true
+          git -C "$CLONE_DIR" push -f origin gh-pages --quiet
+          rm -rf "$CLONE_DIR"
         fi
         
         echo "::notice title=🌐 Live Playwright Report::https://jeswnath.github.io/testPlaywright/"
