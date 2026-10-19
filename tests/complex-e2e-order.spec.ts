@@ -42,7 +42,7 @@ test('Complex E2E PetStore Checkout Transaction Flow', async ({ page }) => {
   // ❌ SIMULATING REAL-WORLD ACCESSIBILITY/ROLE DRIFT:
   // Stylized as a button in CSS, but semantically rendered as an anchor link
   // --------------------------------------------------------------------------
-  await page.getByRole('button', { name: 'Proceed to Checkout' }).click({ timeout: 5000 });
+  await page.getByRole('link', { name: 'Proceed to Checkout' }).click({ timeout: 5000 });
   await expect(page.locator('#Catalog')).toContainText('Payment Details');
 
   // --------------------------------------------------------------------------
