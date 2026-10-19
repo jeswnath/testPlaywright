@@ -5,9 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "playwright test",
-    "test:broken": "playwright test tests/petstore-broken.spec.ts",
-    "test:heal": "node scripts/heal-test.mjs",
-    "test:reset": "node scripts/heal-test.mjs --reset"
+    "test:broken": "playwright test tests/petstore-broken.spec.ts"
   },
   "keywords": [],
   "author": "",
