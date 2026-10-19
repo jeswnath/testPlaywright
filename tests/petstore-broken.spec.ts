@@ -7,7 +7,7 @@ test('PetStore E2E Order Flow - Self Healing Demo', async ({ page }) => {
 
   // 2. Click Sign in (BRITTLE OLD LOCATOR - SIMULATING UI DRIFT)
   await page.getByRole('link', { name: 'Sign In' }).click();
-  await page.locator('input[name="username"]').fill('perf_1');
+  await page.locator('input[name="username"]').fill('perf_1231');
   const passwordField = page.locator('input[name="password"]');
   await passwordField.clear();
   await passwordField.fill('Pass');
