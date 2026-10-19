@@ -39,10 +39,10 @@ test('Complex E2E PetStore Checkout Transaction Flow', async ({ page }) => {
 
   // --------------------------------------------------------------------------
   // STEP 6: Checkout Transition (COMPLEX FAILURE IN ORDER TRANSACTION)
-  // ❌ SIMULATING REAL-WORLD FRONTEND REDESIGN / LOCATOR DRIFT:
-  // A legacy CSS locator 'a.btn-proceed-checkout-drifted' broke after UI refactor
+  // ❌ SIMULATING REAL-WORLD ACCESSIBILITY/ROLE DRIFT:
+  // Stylized as a button in CSS, but semantically rendered as an anchor link
   // --------------------------------------------------------------------------
-  await page.getByRole('link', { name: 'Proceed to Checkout' }).click();
+  await page.getByRole('button', { name: 'Proceed to Checkout' }).click({ timeout: 5000 });
   await expect(page.locator('#Catalog')).toContainText('Payment Details');
 
   // --------------------------------------------------------------------------
