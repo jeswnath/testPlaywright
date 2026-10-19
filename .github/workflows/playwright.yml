@@ -66,3 +66,12 @@ jobs:
         publish_dir: ./playwright-report
         user_name: 'github-actions[bot]'
         user_email: 'github-actions[bot]@users.noreply.github.com'
+
+    - name: 📢 Display Live Report Link in Run Summary
+      if: ${{ !cancelled() }}
+      run: |
+        echo "::notice title=🌐 Live Playwright Report Available::https://jeswnath.github.io/testPlaywright/"
+        echo "## 🌐 Live Playwright Test Report" >> $GITHUB_STEP_SUMMARY
+        echo "> 🚀 **[Click Here to Open the Live Interactive Playwright Report](https://jeswnath.github.io/testPlaywright/)**" >> $GITHUB_STEP_SUMMARY
+        echo "> *(Includes full interactive Trace Viewer, Videos, and Step-by-Step Screenshots)*" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
