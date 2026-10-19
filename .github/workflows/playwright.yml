@@ -35,13 +35,15 @@ jobs:
       env:
         CI: true
 
-    - name: 🤖 Autonomous Self-Healing QA Agent (External Reusable Action)
+    - name: 🤖 Autonomous Self-Healing QA Agent
       if: failure()
       uses: jeswnath/Agents@main
       env:
         AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
         AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
         AZURE_OPENAI_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
+        UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+        UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         teams-webhook: ${{ secrets.TEAMS_WEBHOOK_URL }}
