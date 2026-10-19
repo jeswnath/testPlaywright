@@ -1,10 +1,22 @@
 name: Playwright Tests
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      test_spec:
+        description: 'Select Test Spec to Run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'tests/petstore.spec.ts'
+          - 'tests/complex-e2e-order.spec.ts'
+          - 'tests/petstore-broken.spec.ts'
+      grep:
+        description: 'Optional: Filter by test name (-g regex pattern)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
@@ -37,7 +49,17 @@ jobs:
       run: npx playwright install --with-deps
 
     - name: Run Playwright tests
-      run: npx playwright test
+      run: |
+        ARGS=()
+        if [ -n "${{ inputs.test_spec }}" ] && [ "${{ inputs.test_spec }}" != "all" ]; then
+          ARGS+=("${{ inputs.test_spec }}")
+        fi
+        if [ -n "${{ inputs.grep }}" ]; then
+          ARGS+=(-g "${{ inputs.grep }}")
+        fi
+
+        echo "▶ Executing: npx playwright test ${ARGS[@]}"
+        npx playwright test "${ARGS[@]}"
       env:
         CI: true
 
