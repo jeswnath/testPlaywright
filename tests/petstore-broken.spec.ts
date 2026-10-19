@@ -14,7 +14,7 @@ test('PetStore E2E Order Flow - Self Healing Demo', async ({ page }) => {
   await page.locator('input[name="signon"]').click();
 
   // Verify successful sign-in
-  await expect(page.getByRole('link', { name: /Sign Out/i })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Sign Out' })).toBeVisible();
 
   // 3. Click FISH
   await page.locator('#QuickLinks a[href*="categoryId=FISH"]').click();
