@@ -31,18 +31,21 @@ test('Complex E2E PetStore Checkout Transaction Flow', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Angelfish' })).toBeVisible();
 
   // --------------------------------------------------------------------------
-  // STEP 5: Cart Ingestion & Subtotal Validation
+  // STEP 5: Variant Disambiguation & Cart Ingestion
+  // ❌ HIGH-REASONING FAILURE:
+  // The catalog table lists two variants: EST-1 (Large) and EST-2 (Small).
+  // Both rows contain an identical "Add to Cart" link.
+  // Downstream assertions require EST-2 (Small Angelfish).
   // --------------------------------------------------------------------------
-  await page.getByRole('link', { name: 'Add to Cart' }).first().click();
+  await page.getByRole('link', { name: 'Add to Cart' }).click();
   await expect(page.getByRole('heading', { name: 'Shopping Cart' })).toBeVisible();
-  await expect(page.locator('#Catalog')).toContainText('Sub Total: $16.50');
+  await expect(page.locator('#Catalog')).toContainText('EST-2');
+  await expect(page.locator('#Catalog')).toContainText('Small Angelfish');
 
   // --------------------------------------------------------------------------
-  // STEP 6: Checkout Transition (COMPLEX FAILURE IN ORDER TRANSACTION)
-  // ❌ SIMULATING REAL-WORLD ACCESSIBILITY/ROLE DRIFT:
-  // Stylized as a button in CSS, but semantically rendered as an anchor link
+  // STEP 6: Checkout Transition
   // --------------------------------------------------------------------------
-  await page.getByRole('link', { name: 'Proceed to Checkout' }).click({ timeout: 5000 });
+  await page.getByRole('link', { name: 'Proceed to Checkout' }).click();
   await expect(page.locator('#Catalog')).toContainText('Payment Details');
 
   // --------------------------------------------------------------------------
