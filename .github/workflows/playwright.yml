@@ -41,6 +41,10 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         teams-webhook: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        azure-openai-key: ${{ secrets.AZURE_OPENAI_API_KEY }}
+        azure-openai-endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+        azure-openai-deployment: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
+        azure-openai-api-version: ${{ secrets.AZURE_OPENAI_API_VERSION }}
 
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
