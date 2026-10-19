@@ -33,8 +33,10 @@ export default defineConfig({
     /* Base URL to use in actions like `await page.goto('')`. */
     // baseURL: 'http://localhost:3000',
 
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'on-first-retry',
+    /* Always capture trace, video, and screenshot irrespective of pass or fail */
+    trace: 'on',
+    video: 'on',
+    screenshot: 'on',
     headless: !!process.env.CI,
   },
 
@@ -45,7 +47,6 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         channel: process.env.CI ? undefined : 'chrome',
-        headless: !!process.env.CI,
       },
     },
 
