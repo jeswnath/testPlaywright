@@ -70,15 +70,11 @@ jobs:
             .github/agents
             .github/skills
 
-      - name: Install Copilot CLI
-        if: always()
-        run: npm install -g @github/copilot
-
-      - name: Verify Copilot CLI is available
+      - name: Install GitHub Copilot CLI extension
         if: always()
         run: |
-          which copilot
-          copilot --version
+          gh extension install github/gh-copilot || true
+          gh copilot --version || true
 
       - name: Run failure-analysis agent from central repo
         if: steps.playwright.outcome == 'failure'
@@ -91,7 +87,7 @@ jobs:
             exit 1
           fi
 
-          copilot \
+          gh copilot \
             --agent="Self-Healing-QA" \
             --prompt "Analyze the failures in playwright-output.log from this repo. Classify the issue as either locator drift or real application bug. Explain the likely root cause and write the analysis to failure-analysis.md. If it is a locator issue, propose the most resilient Playwright locator to replace the broken one." \
             --allow-tool='shell(cat:*)' \
@@ -110,7 +106,7 @@ jobs:
             exit 1
           fi
 
-          copilot \
+          gh copilot \
             --agent="Test-Outcome-Summary" \
             --prompt "Review the Playwright run output in playwright-output.log from this repo. Summarize what passed, what user flow was validated, and write a brief explanation to test-success-summary.md." \
             --allow-tool='shell(cat:*)' \
