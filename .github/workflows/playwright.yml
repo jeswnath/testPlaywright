@@ -82,19 +82,9 @@ jobs:
           exit 1
         fi
 
-        AGENT_TEXT=$(cat .agent-repo/.github/agents/Self-Healing-QA.md)
-        SKILL_TEXT=$(cat .agent-repo/.github/skills/self-healing-locator/SKILL.md)
-
         copilot \
-          --prompt "Use the definitions below exactly.
-
-          AGENT:
-          $AGENT_TEXT
-
-          SKILL:
-          $SKILL_TEXT
-
-          Analyze the failures in playwright-output.log from this repo. Classify the issue as either locator drift or real application bug. Explain the likely root cause and write the analysis to failure-analysis.md. If it is a locator issue, propose the most resilient Playwright locator to replace the broken one." \
+          --agent="Self-Healing-QA" \
+          --prompt "Analyze the failures in playwright-output.log from this repo. Classify the issue as either locator drift or real application bug. Explain the likely root cause and write the analysis to failure-analysis.md. If it is a locator issue, propose the most resilient Playwright locator to replace the broken one." \
           --allow-tool='shell(cat:*)' \
           --allow-tool='shell(ls:*)' \
           --allow-tool='write' \
@@ -112,15 +102,9 @@ jobs:
           exit 1
         fi
 
-        AGENT_TEXT=$(cat .agent-repo/.github/agents/Test-Outcome-Summary.md)
-
         copilot \
-          --prompt "Use the agent definition below exactly.
-
-          AGENT:
-          $AGENT_TEXT
-
-          Review the Playwright run output in playwright-output.log from this repo. Summarize what passed, what user flow was validated, and write a brief explanation to test-success-summary.md." \
+          --agent="Test-Outcome-Summary" \
+          --prompt "Review the Playwright run output in playwright-output.log from this repo. Summarize what passed, what user flow was validated, and write a brief explanation to test-success-summary.md." \
           --allow-tool='shell(cat:*)' \
           --allow-tool='shell(ls:*)' \
           --allow-tool='write' \
