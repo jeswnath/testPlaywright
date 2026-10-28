@@ -88,9 +88,13 @@ jobs:
           GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
         run: |
           set -o pipefail
+          PLAYWRIGHT_LOG="$(cat playwright-output.log)"
+          PROMPT="$(printf '%s\n\nFull Playwright output:\n%s' \
+            'Analyze this Playwright output. Classify the issue as locator drift or a real application bug. Explain the likely root cause and, if it is locator drift, recommend the most resilient Playwright locator. This is triage only: do not modify files, run commands, create a PR, or write a report. Return the analysis directly.' \
+            "$PLAYWRIGHT_LOG")"
           copilot \
             --agent="Self-Healing-QA" \
-            --prompt "Analyze @playwright-output.log from this repository. Classify the issue as locator drift or a real application bug. Explain the likely root cause and, if it is locator drift, recommend the most resilient Playwright locator. This is triage only: do not modify files, run commands, create a PR, or write a report. Return the analysis directly." \
+            --prompt "$PROMPT" \
             --deny-tool='write' \
             --deny-tool='shell' | tee -a "$GITHUB_STEP_SUMMARY"
 
@@ -100,9 +104,13 @@ jobs:
           GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
         run: |
           set -o pipefail
+          PLAYWRIGHT_LOG="$(cat playwright-output.log)"
+          PROMPT="$(printf '%s\n\nFull Playwright output:\n%s' \
+            'Review this Playwright output. Summarize what passed, which user flow was validated, and which browser was involved if shown. Keep the response concise. Do not create or modify files; return the summary directly.' \
+            "$PLAYWRIGHT_LOG")"
           copilot \
             --agent="Test-Outcome-Summary" \
-            --prompt "Review @playwright-output.log from this repository. Summarize what passed, which user flow was validated, and which browser was involved if shown. Keep the response concise. Do not create or modify files; return the summary directly." \
+            --prompt "$PROMPT" \
             --deny-tool='write' \
             --deny-tool='shell' | tee -a "$GITHUB_STEP_SUMMARY"
 
