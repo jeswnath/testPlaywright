@@ -70,57 +70,41 @@ jobs:
             .github/agents
             .github/skills
 
-      - name: Install GitHub Copilot CLI extension
+      - name: Install GitHub Copilot CLI
+        if: always()
+        run: curl -fsSL https://gh.io/copilot-install | bash
+
+      - name: Prepare central agent profiles
         if: always()
         run: |
-          gh extension install github/gh-copilot || true
-          gh copilot --version || true
+          mkdir -p .github/agents .github/skills
+          cp .agent-repo/.github/agents/Self-Healing-QA.md .github/agents/Self-Healing-QA.agent.md
+          cp .agent-repo/.github/agents/Test-Outcome-Summary.md .github/agents/Test-Outcome-Summary.agent.md
+          cp -R .agent-repo/.github/skills/. .github/skills/
 
       - name: Run failure-analysis agent from central repo
         if: steps.playwright.outcome == 'failure'
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
         run: |
-          set -e
-          if [ ! -f .agent-repo/.github/agents/Self-Healing-QA.md ]; then
-            echo "Missing Self-Healing-QA.md in Agents repo"
-            exit 1
-          fi
-
-          gh copilot \
+          set -o pipefail
+          copilot \
             --agent="Self-Healing-QA" \
-            --prompt "Analyze the failures in playwright-output.log from this repo. Classify the issue as either locator drift or real application bug. Explain the likely root cause and write the analysis to failure-analysis.md. If it is a locator issue, propose the most resilient Playwright locator to replace the broken one." \
-            --allow-tool='shell(cat:*)' \
-            --allow-tool='shell(ls:*)' \
-            --allow-tool='write' \
-            -s
+            --prompt "Analyze @playwright-output.log from this repository. Classify the issue as locator drift or a real application bug. Explain the likely root cause and, if it is locator drift, recommend the most resilient Playwright locator. This is triage only: do not modify files, run commands, create a PR, or write a report. Return the analysis directly." \
+            --deny-tool='write' \
+            --deny-tool='shell' | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Run success-summary agent from central repo
         if: steps.playwright.outcome == 'success'
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
         run: |
-          set -e
-          if [ ! -f .agent-repo/.github/agents/Test-Outcome-Summary.md ]; then
-            echo "Missing Test-Outcome-Summary.md in Agents repo"
-            exit 1
-          fi
-
-          gh copilot \
+          set -o pipefail
+          copilot \
             --agent="Test-Outcome-Summary" \
-            --prompt "Review the Playwright run output in playwright-output.log from this repo. Summarize what passed, what user flow was validated, and write a brief explanation to test-success-summary.md." \
-            --allow-tool='shell(cat:*)' \
-            --allow-tool='shell(ls:*)' \
-            --allow-tool='write' \
-            -s
-
-      - name: Add failure analysis to workflow summary
-        if: steps.playwright.outcome == 'failure' && hashFiles('failure-analysis.md') != ''
-        run: cat failure-analysis.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Add success summary to workflow summary
-        if: steps.playwright.outcome == 'success' && hashFiles('test-success-summary.md') != ''
-        run: cat test-success-summary.md >> "$GITHUB_STEP_SUMMARY"
+            --prompt "Review @playwright-output.log from this repository. Summarize what passed, which user flow was validated, and which browser was involved if shown. Keep the response concise. Do not create or modify files; return the summary directly." \
+            --deny-tool='write' \
+            --deny-tool='shell' | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Mark workflow failed if tests failed
         if: steps.playwright.outcome == 'failure'
