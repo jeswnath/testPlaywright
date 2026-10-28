@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { PETSTORE_CATALOG_URL, setupPetStoreFixture } from './support/petstore-fixture';
 
-test('PetStore E2E Order Flow - Self Healing Demo', async ({ page }) => {
-  // 1. Launch - https://petstore.octoperf.com/actions/Catalog.action
-  await page.goto('https://petstore.octoperf.com/actions/Catalog.action');
+test('PetStore Order Flow - Self Healing Demo', async ({ page }) => {
+  await setupPetStoreFixture(page);
+  await page.goto(PETSTORE_CATALOG_URL);
   await expect(page).toHaveTitle(/JPetStore Demo/);
 
   // 2. Click Sign in (BRITTLE OLD LOCATOR - SIMULATING UI DRIFT)

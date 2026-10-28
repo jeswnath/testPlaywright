@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { PETSTORE_CATALOG_URL, setupPetStoreFixture } from './support/petstore-fixture';
 
-test('Complex E2E PetStore Checkout Transaction Flow', async ({ page }) => {
+test('Complex PetStore Checkout Transaction Flow', async ({ page }) => {
   // --------------------------------------------------------------------------
   // STEP 1: Launch Catalog & Validate Session Readiness
   // --------------------------------------------------------------------------
-  await page.goto('https://petstore.octoperf.com/actions/Catalog.action');
+  await setupPetStoreFixture(page);
+  await page.goto(PETSTORE_CATALOG_URL);
   await expect(page).toHaveTitle(/JPetStore Demo/);
 
   // --------------------------------------------------------------------------
