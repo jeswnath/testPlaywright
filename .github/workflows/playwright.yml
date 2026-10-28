@@ -30,130 +30,138 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-node@v4
-      with:
-        node-version: lts/*
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
 
-    - name: Run Playwright tests
-      id: playwright
-      continue-on-error: true
-      run: |
-        ARGS=()
-        if [ -n "${{ inputs.test_spec }}" ] && [ "${{ inputs.test_spec }}" != "all" ]; then
-          ARGS+=("${{ inputs.test_spec }}")
-        fi
+      - name: Run Playwright tests
+        id: playwright
+        continue-on-error: true
+        run: |
+          ARGS=()
+          if [ -n "${{ inputs.test_spec }}" ] && [ "${{ inputs.test_spec }}" != "all" ]; then
+            ARGS+=("${{ inputs.test_spec }}")
+          fi
 
-        echo "▶ Executing: npx playwright test ${ARGS[@]}"
-        npx playwright test "${ARGS[@]}" 2>&1 | tee playwright-output.log
-        exit ${PIPESTATUS[0]}
-      env:
-        CI: true
+          echo "▶ Executing: npx playwright test ${ARGS[@]}"
+          npx playwright test "${ARGS[@]}" 2>&1 | tee playwright-output.log
+          exit ${PIPESTATUS[0]}
+        env:
+          CI: true
 
-    - name: Checkout agent definitions repo
-      if: always()
-      uses: actions/checkout@v4
-      with:
-        repository: jeswnath/Agents
-        path: .agent-repo
-        ref: main
-        sparse-checkout: |
-          .github/agents
-          .github/skills
+      - name: Checkout agent definitions repo
+        if: always()
+        uses: actions/checkout@v4
+        with:
+          repository: jeswnath/Agents
+          path: .agent-repo
+          ref: main
+          sparse-checkout: |
+            .github/agents
+            .github/skills
 
-    - name: Run failure-analysis agent from central repo
-      if: steps.playwright.outcome == 'failure'
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
-      run: |
-        set -e
+      - name: Install Copilot CLI
+        if: always()
+        run: npm install -g @github/copilot
 
-        if [ ! -f .agent-repo/.github/agents/Self-Healing-QA.md ]; then
-          echo "Missing Self-Healing-QA.md in Agents repo"
-          exit 1
-        fi
+      - name: Verify Copilot CLI is available
+        if: always()
+        run: |
+          which copilot
+          copilot --version
 
-        copilot \
-          --agent="Self-Healing-QA" \
-          --prompt "Analyze the failures in playwright-output.log from this repo. Classify the issue as either locator drift or real application bug. Explain the likely root cause and write the analysis to failure-analysis.md. If it is a locator issue, propose the most resilient Playwright locator to replace the broken one." \
-          --allow-tool='shell(cat:*)' \
-          --allow-tool='shell(ls:*)' \
-          --allow-tool='write' \
-          -s
+      - name: Run failure-analysis agent from central repo
+        if: steps.playwright.outcome == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          if [ ! -f .agent-repo/.github/agents/Self-Healing-QA.md ]; then
+            echo "Missing Self-Healing-QA.md in Agents repo"
+            exit 1
+          fi
 
-    - name: Run success-summary agent from central repo
-      if: steps.playwright.outcome == 'success'
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
-      run: |
-        set -e
+          copilot \
+            --agent="Self-Healing-QA" \
+            --prompt "Analyze the failures in playwright-output.log from this repo. Classify the issue as either locator drift or real application bug. Explain the likely root cause and write the analysis to failure-analysis.md. If it is a locator issue, propose the most resilient Playwright locator to replace the broken one." \
+            --allow-tool='shell(cat:*)' \
+            --allow-tool='shell(ls:*)' \
+            --allow-tool='write' \
+            -s
 
-        if [ ! -f .agent-repo/.github/agents/Test-Outcome-Summary.md ]; then
-          echo "Missing Test-Outcome-Summary.md in Agents repo"
-          exit 1
-        fi
+      - name: Run success-summary agent from central repo
+        if: steps.playwright.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          if [ ! -f .agent-repo/.github/agents/Test-Outcome-Summary.md ]; then
+            echo "Missing Test-Outcome-Summary.md in Agents repo"
+            exit 1
+          fi
 
-        copilot \
-          --agent="Test-Outcome-Summary" \
-          --prompt "Review the Playwright run output in playwright-output.log from this repo. Summarize what passed, what user flow was validated, and write a brief explanation to test-success-summary.md." \
-          --allow-tool='shell(cat:*)' \
-          --allow-tool='shell(ls:*)' \
-          --allow-tool='write' \
-          -s
+          copilot \
+            --agent="Test-Outcome-Summary" \
+            --prompt "Review the Playwright run output in playwright-output.log from this repo. Summarize what passed, what user flow was validated, and write a brief explanation to test-success-summary.md." \
+            --allow-tool='shell(cat:*)' \
+            --allow-tool='shell(ls:*)' \
+            --allow-tool='write' \
+            -s
 
-    - name: Add failure analysis to workflow summary
-      if: steps.playwright.outcome == 'failure' && hashFiles('failure-analysis.md') != ''
-      run: cat failure-analysis.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Add failure analysis to workflow summary
+        if: steps.playwright.outcome == 'failure' && hashFiles('failure-analysis.md') != ''
+        run: cat failure-analysis.md >> "$GITHUB_STEP_SUMMARY"
 
-    - name: Add success summary to workflow summary
-      if: steps.playwright.outcome == 'success' && hashFiles('test-success-summary.md') != ''
-      run: cat test-success-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Add success summary to workflow summary
+        if: steps.playwright.outcome == 'success' && hashFiles('test-success-summary.md') != ''
+        run: cat test-success-summary.md >> "$GITHUB_STEP_SUMMARY"
 
-    - name: Mark workflow failed if tests failed
-      if: steps.playwright.outcome == 'failure'
-      run: exit 1
+      - name: Mark workflow failed if tests failed
+        if: steps.playwright.outcome == 'failure'
+        run: exit 1
 
-    - name: 🌐 Live Playwright Report (https://jeswnath.github.io/testPlaywright/)
-      if: ${{ !cancelled() }}
-      run: |
-        if [ -d "playwright-report" ]; then
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: 🌐 Live Playwright Report (https://jeswnath.github.io/testPlaywright/)
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -d "playwright-report" ]; then
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          CLONE_DIR=$(mktemp -d)
-          git clone --depth 1 --branch gh-pages "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" "$CLONE_DIR" 2>/dev/null || {
-            mkdir -p "$CLONE_DIR"
-            git -C "$CLONE_DIR" init -b gh-pages
-            git -C "$CLONE_DIR" remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-          }
+            CLONE_DIR=$(mktemp -d)
+            git clone --depth 1 --branch gh-pages "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" "$CLONE_DIR" 2>/dev/null || {
+              mkdir -p "$CLONE_DIR"
+              git -C "$CLONE_DIR" init -b gh-pages
+              git -C "$CLONE_DIR" remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+            }
 
-          rm -rf "$CLONE_DIR"/*
-          cp -r playwright-report/* "$CLONE_DIR/"
-          touch "$CLONE_DIR/.nojekyll"
+            rm -rf "$CLONE_DIR"/*
+            cp -r playwright-report/* "$CLONE_DIR/"
+            touch "$CLONE_DIR/.nojekyll"
 
-          git -C "$CLONE_DIR" add -A
-          git -C "$CLONE_DIR" commit -m "deploy: update live Playwright HTML report [skip ci]" --quiet || true
-          git -C "$CLONE_DIR" push -f origin gh-pages --quiet
-          rm -rf "$CLONE_DIR"
-        fi
+            git -C "$CLONE_DIR" add -A
+            git -C "$CLONE_DIR" commit -m "deploy: update live Playwright HTML report [skip ci]" --quiet || true
+            git -C "$CLONE_DIR" push -f origin gh-pages --quiet
+            rm -rf "$CLONE_DIR"
+          fi
 
-        echo "::notice title=🌐 Live Playwright Report::https://jeswnath.github.io/testPlaywright/"
-        echo "## 🌐 Live Playwright Test Report" >> $GITHUB_STEP_SUMMARY
-        echo "> 🚀 **[Click Here to Open the Live Playwright HTML Report](https://jeswnath.github.io/testPlaywright/)**" >> $GITHUB_STEP_SUMMARY
-        echo "> *(Includes full interactive Trace Viewer, Videos, and Step-by-Step Screenshots)*" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
+          echo "::notice title=🌐 Live Playwright Report::https://jeswnath.github.io/testPlaywright/"
+          echo "## 🌐 Live Playwright Test Report" >> $GITHUB_STEP_SUMMARY
+          echo "> 🚀 **[Click Here to Open the Live Playwright HTML Report](https://jeswnath.github.io/testPlaywright/)**" >> $GITHUB_STEP_SUMMARY
+          echo "> *(Includes full interactive Trace Viewer, Videos, and Step-by-Step Screenshots)*" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-        echo ""
-        echo "================================================================================"
-        echo "🌐 LIVE PLAYWRIGHT REPORT: https://jeswnath.github.io/testPlaywright/"
-        echo "================================================================================"
-        echo "✅ Report published cleanly to GitHub Pages."
+          echo ""
+          echo "================================================================================"
+          echo "🌐 LIVE PLAYWRIGHT REPORT: https://jeswnath.github.io/testPlaywright/"
+          echo "================================================================================"
+          echo "✅ Report published cleanly to GitHub Pages."
