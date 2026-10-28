@@ -19,6 +19,7 @@ permissions:
   issues: write
   pages: write
   id-token: write
+  copilot-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -59,7 +60,7 @@ jobs:
         CI: true
 
     - name: Checkout agent definitions repo
-      if: steps.playwright.outcome == 'failure'
+      if: always()
       uses: actions/checkout@v4
       with:
         repository: jeswnath/Agents
@@ -69,49 +70,69 @@ jobs:
           .github/agents
           .github/skills
 
-    - name: Install Copilot CLI
-      if: steps.playwright.outcome == 'failure'
-      run: npm install -g @github/copilot
-
-    - name: Run centralized Copilot failure-analysis agent
+    - name: Run failure-analysis agent from central repo
       if: steps.playwright.outcome == 'failure'
       env:
         GITHUB_TOKEN: ${{ github.token }}
-        AGENT_FILE: .agent-repo/.github/agents/Self-Healing-QA.md
-        SKILL_FILE: .agent-repo/.github/skills/self-healing-locator/SKILL.md
       run: |
         set -e
 
-        if [ ! -f "$AGENT_FILE" ] || [ ! -f "$SKILL_FILE" ]; then
-          echo "Missing agent definitions in the checked-out Agents repo."
+        if [ ! -f .agent-repo/.github/agents/Self-Healing-QA.md ]; then
+          echo "Missing Self-Healing-QA.md in Agents repo"
           exit 1
         fi
 
-        AGENT_TEXT=$(cat "$AGENT_FILE")
-        SKILL_TEXT=$(cat "$SKILL_FILE")
+        AGENT_TEXT=$(cat .agent-repo/.github/agents/Self-Healing-QA.md)
+        SKILL_TEXT=$(cat .agent-repo/.github/skills/self-healing-locator/SKILL.md)
 
         copilot \
-          --agent=failure-analyzer \
-          --prompt "Use the agent definitions below exactly.
+          --prompt "Use the definitions below exactly.
 
-          AGENT DEFINITION:
+          AGENT:
           $AGENT_TEXT
 
-          SKILL PLAYBOOK:
+          SKILL:
           $SKILL_TEXT
 
-          Analyze the log in playwright-output.log from the current repo. Identify the likely root cause, classify the failure, and write a concise report to failure-analysis.md. If the failure looks like a locator drift, recommend the best accessible Playwright locator to replace the broken one." \
+          Analyze the failures in playwright-output.log from this repo. Classify the issue as either locator drift or real application bug. Explain the likely root cause and write the analysis to failure-analysis.md. If it is a locator issue, propose the most resilient Playwright locator to replace the broken one." \
+          --allow-tool='shell(cat:*)' \
+          --allow-tool='shell(ls:*)' \
+          --allow-tool='write' \
+          -s
+
+    - name: Run success-summary agent from central repo
+      if: steps.playwright.outcome == 'success'
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+
+        if [ ! -f .agent-repo/.github/agents/Test-Outcome-Summary.md ]; then
+          echo "Missing Test-Outcome-Summary.md in Agents repo"
+          exit 1
+        fi
+
+        AGENT_TEXT=$(cat .agent-repo/.github/agents/Test-Outcome-Summary.md)
+
+        copilot \
+          --prompt "Use the agent definition below exactly.
+
+          AGENT:
+          $AGENT_TEXT
+
+          Review the Playwright run output in playwright-output.log from this repo. Summarize what passed, what user flow was validated, and write a brief explanation to test-success-summary.md." \
           --allow-tool='shell(cat:*)' \
           --allow-tool='shell(ls:*)' \
           --allow-tool='write' \
           -s
 
     - name: Add failure analysis to workflow summary
-      if: steps.playwright.outcome == 'failure'
-      run: |
-        if [ -f failure-analysis.md ]; then
-          cat failure-analysis.md >> "$GITHUB_STEP_SUMMARY"
-        fi
+      if: steps.playwright.outcome == 'failure' && hashFiles('failure-analysis.md') != ''
+      run: cat failure-analysis.md >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Add success summary to workflow summary
+      if: steps.playwright.outcome == 'success' && hashFiles('test-success-summary.md') != ''
+      run: cat test-success-summary.md >> "$GITHUB_STEP_SUMMARY"
 
     - name: Mark workflow failed if tests failed
       if: steps.playwright.outcome == 'failure'
@@ -123,30 +144,30 @@ jobs:
         if [ -d "playwright-report" ]; then
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           CLONE_DIR=$(mktemp -d)
           git clone --depth 1 --branch gh-pages "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" "$CLONE_DIR" 2>/dev/null || {
             mkdir -p "$CLONE_DIR"
             git -C "$CLONE_DIR" init -b gh-pages
             git -C "$CLONE_DIR" remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           }
-          
+
           rm -rf "$CLONE_DIR"/*
           cp -r playwright-report/* "$CLONE_DIR/"
           touch "$CLONE_DIR/.nojekyll"
-          
+
           git -C "$CLONE_DIR" add -A
           git -C "$CLONE_DIR" commit -m "deploy: update live Playwright HTML report [skip ci]" --quiet || true
           git -C "$CLONE_DIR" push -f origin gh-pages --quiet
           rm -rf "$CLONE_DIR"
         fi
-        
+
         echo "::notice title=🌐 Live Playwright Report::https://jeswnath.github.io/testPlaywright/"
         echo "## 🌐 Live Playwright Test Report" >> $GITHUB_STEP_SUMMARY
         echo "> 🚀 **[Click Here to Open the Live Playwright HTML Report](https://jeswnath.github.io/testPlaywright/)**" >> $GITHUB_STEP_SUMMARY
         echo "> *(Includes full interactive Trace Viewer, Videos, and Step-by-Step Screenshots)*" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        
+
         echo ""
         echo "================================================================================"
         echo "🌐 LIVE PLAYWRIGHT REPORT: https://jeswnath.github.io/testPlaywright/"
