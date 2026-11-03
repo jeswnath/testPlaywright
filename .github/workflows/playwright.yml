@@ -178,4 +178,4 @@ jobs:
             | tee "$RUNNER_TEMP/mcp-probe-output.txt"
 
           grep -F 'WEB_FETCH_MCP_PROBE_OK' "$RUNNER_TEMP/mcp-probe-output.txt"
-          grep -F '"gen_ai.tool.name":"web-fetch"' "$COPILOT_OTEL_FILE_EXPORTER_PATH"
+          grep -F '"gen_ai.tool.name":"fetch"' "$COPILOT_OTEL_FILE_EXPORTER_PATH"
