@@ -85,7 +85,7 @@ jobs:
       - name: Run failure-analysis agent from central repo
         if: steps.playwright.outcome == 'failure'
         env:
-          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -o pipefail
           PLAYWRIGHT_LOG="$(cat playwright-output.log)"
@@ -101,7 +101,7 @@ jobs:
       - name: Run success-summary agent from central repo
         if: steps.playwright.outcome == 'success'
         env:
-          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -o pipefail
           PLAYWRIGHT_LOG="$(cat playwright-output.log)"
