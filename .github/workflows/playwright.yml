@@ -81,7 +81,7 @@ jobs:
           cp .agent-repo/.github/agents/Self-Healing-QA.md .github/agents/Self-Healing-QA.agent.md
           cp .agent-repo/.github/agents/Test-Outcome-Summary.md .github/agents/Test-Outcome-Summary.agent.md
           cp -R .agent-repo/.github/skills/. .github/skills/
-          cp .agent-repo/.github/agents/Web-Search-Probe.md .github/agents/Web-Search-Probe.agent.md
+          cp .agent-repo/.github/agents/Time-MCP-Probe.md .github/agents/Time-MCP-Probe.agent.md
 
       - name: Run failure-analysis agent from central repo
         if: steps.playwright.outcome == 'failure'
@@ -155,27 +155,26 @@ jobs:
           echo "================================================================================"
           echo "✅ Report published cleanly to GitHub Pages."
 
-      - name: Set up uv for Fetch MCP
+      - name: Set up uv for Time MCP
         if: always()
         uses: astral-sh/setup-uv@v5
 
-      - name: Run MCP web-fetch probe
+      - name: Run MCP time probe
         if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          COPILOT_OTEL_FILE_EXPORTER_PATH: ${{ runner.temp }}/copilot-otel.jsonl
         run: |
           set -euo pipefail
-          PROMPT='Use the web-fetch MCP tool to fetch https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference. Find the description of --additional-mcp-config. Return the exact source URL and a short excerpt. End your response with WEB_FETCH_MCP_PROBE_OK.'
+          PROMPT='Use the Time MCP server tool get_current_time with timezone UTC. Return the timezone and exact datetime from the tool result. End your response with TIME_MCP_PROBE_OK.'
 
           copilot \
-            --agent="web-fetch-probe" \
+            --agent="time-mcp-probe" \
             --prompt "$PROMPT" \
             --additional-mcp-config=@.agent-repo/.mcp.json \
-            --allow-tool='web(fetch)' \
+            --allow-tool='time(get_current_time)' \
             --deny-tool='write' \
             --deny-tool='shell' \
-            | tee "$RUNNER_TEMP/mcp-probe-output.txt"
+            | tee "$RUNNER_TEMP/mcp-time-probe-output.txt"
 
-          grep -F 'WEB_FETCH_MCP_PROBE_OK' "$RUNNER_TEMP/mcp-probe-output.txt"
-          grep -F '"gen_ai.tool.name":"fetch"' "$COPILOT_OTEL_FILE_EXPORTER_PATH"
+          grep -F 'TIME_MCP_PROBE_OK' "$RUNNER_TEMP/mcp-time-probe-output.txt"
+          grep -F 'get_current_time (MCP: time)' "$RUNNER_TEMP/mcp-time-probe-output.txt"
