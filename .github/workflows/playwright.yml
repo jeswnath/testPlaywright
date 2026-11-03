@@ -81,6 +81,7 @@ jobs:
           cp .agent-repo/.github/agents/Self-Healing-QA.md .github/agents/Self-Healing-QA.agent.md
           cp .agent-repo/.github/agents/Test-Outcome-Summary.md .github/agents/Test-Outcome-Summary.agent.md
           cp -R .agent-repo/.github/skills/. .github/skills/
+          cp .agent-repo/.github/agents/Web-Search-Probe.md .github/agents/Web-Search-Probe.agent.md
 
       - name: Run failure-analysis agent from central repo
         if: steps.playwright.outcome == 'failure'
