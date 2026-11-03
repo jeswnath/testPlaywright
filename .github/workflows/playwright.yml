@@ -153,3 +153,28 @@ jobs:
           echo "🌐 LIVE PLAYWRIGHT REPORT: https://jeswnath.github.io/testPlaywright/"
           echo "================================================================================"
           echo "✅ Report published cleanly to GitHub Pages."
+
+      - name: Set up uv for Fetch MCP
+        if: always()
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run MCP web-fetch probe
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          COPILOT_OTEL_FILE_EXPORTER_PATH: ${{ runner.temp }}/copilot-otel.jsonl
+        run: |
+          set -euo pipefail
+          PROMPT='Use the web-fetch MCP tool to fetch https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference. Find the description of --additional-mcp-config. Return the exact source URL and a short excerpt. End your response with WEB_FETCH_MCP_PROBE_OK.'
+
+          copilot \
+            --agent="web-fetch-probe" \
+            --prompt "$PROMPT" \
+            --additional-mcp-config=@.agent-repo/.mcp.json \
+            --allow-tool='web(fetch)' \
+            --deny-tool='write' \
+            --deny-tool='shell' \
+            | tee "$RUNNER_TEMP/mcp-probe-output.txt"
+
+          grep -F 'WEB_FETCH_MCP_PROBE_OK' "$RUNNER_TEMP/mcp-probe-output.txt"
+          grep -F '"gen_ai.tool.name":"web-fetch"' "$COPILOT_OTEL_FILE_EXPORTER_PATH"
