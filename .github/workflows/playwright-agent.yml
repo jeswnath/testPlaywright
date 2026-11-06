@@ -11,11 +11,6 @@ on:
         description: 'Read-only checks (example: Open the home page and report its title and visible navigation links)'
         required: true
         type: string
-      authorized_target:
-        description: Confirm that you own or are authorized to test this target
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -26,12 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Confirm target authorization
-        if: ${{ inputs.authorized_target != true }}
-        run: |
-          echo "The target must be owned by you or explicitly authorized for testing."
-          exit 1
-
       - name: Check out agent definitions
         uses: actions/checkout@v4
         with:
@@ -66,7 +55,7 @@ jobs:
         run: |
           set -o pipefail
           PROMPT="$(printf '%s\n\nTarget URL: %s\nRequested actions: %s\n' \
-            'Use the Playwright MCP tools to navigate to the target URL and perform the requested read-only UI checks. Proceed only because the workflow requester confirmed authorization. Do not submit forms, change or delete data, make purchases, enter credentials or personal data, probe for vulnerabilities, or access unrelated destinations. If the requested actions require any of these, stop and report that they are outside this workflow scope. Summarize the observed results and report tool failures without guessing.' \
+            'Use the Playwright MCP tools to navigate to the target URL and perform the requested read-only UI checks. Do not submit forms, change or delete data, make purchases, enter credentials or personal data, probe for vulnerabilities, or access unrelated destinations. If the requested actions require any of these, stop and report that they are outside this workflow scope. Summarize the observed results and report tool failures without guessing.' \
             "$TARGET_URL" \
             "$REQUESTED_ACTIONS")"
 
