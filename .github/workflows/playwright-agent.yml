@@ -1,0 +1,77 @@
+name: Playwright Agent Actions
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Application URL (example: https://example.com)'
+        required: true
+        type: string
+      requested_actions:
+        description: 'Read-only checks (example: Open the home page and report its title and visible navigation links)'
+        required: true
+        type: string
+      authorized_target:
+        description: Confirm that you own or are authorized to test this target
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  copilot-requests: write
+
+jobs:
+  playwright-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Confirm target authorization
+        if: ${{ inputs.authorized_target != true }}
+        run: |
+          echo "The target must be owned by you or explicitly authorized for testing."
+          exit 1
+
+      - name: Check out agent definitions
+        uses: actions/checkout@v4
+        with:
+          repository: jeswnath/Agents
+          ref: main
+          path: .agent-repo
+          sparse-checkout: |
+            .mcp.json
+            .github/agents/playwrightAgent.md
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install GitHub Copilot CLI
+        run: curl -fsSL https://gh.io/copilot-install | bash
+
+      - name: Prepare Playwright agent profile
+        run: |
+          mkdir -p .github/agents
+          cp .agent-repo/.github/agents/playwrightAgent.md .github/agents/playwrightAgent.agent.md
+
+      - name: Run Playwright agent with MCP
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TARGET_URL: ${{ inputs.target_url }}
+          REQUESTED_ACTIONS: ${{ inputs.requested_actions }}
+        run: |
+          set -o pipefail
+          PROMPT="$(printf '%s\n\nTarget URL: %s\nRequested actions: %s\n' \
+            'Use Playwright MCP to perform the requested read-only UI checks on the target below. Proceed only because the workflow requester confirmed authorization. Do not submit forms, change or delete data, make purchases, enter credentials or personal data, probe for vulnerabilities, or access unrelated destinations. If the requested actions require any of these, stop and report that they are outside this workflow scope. Summarize the observed results and report tool failures without guessing.' \
+            "$TARGET_URL" \
+            "$REQUESTED_ACTIONS")"
+
+          copilot \
+            --agent="playwrightAgent" \
+            --prompt "$PROMPT" \
+            --additional-mcp-config=@.agent-repo/.mcp.json \
+            --allow-tool='playwright(*)' \
+            --deny-tool='write' \
+            --deny-tool='shell' \
+            | tee -a "$GITHUB_STEP_SUMMARY"
