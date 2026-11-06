@@ -39,13 +39,12 @@ jobs:
           ref: main
           path: .agent-repo
           sparse-checkout: |
-            .mcp.json
             .github/agents/playwrightAgent.md
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 22.x
 
       - name: Install GitHub Copilot CLI
         run: curl -fsSL https://gh.io/copilot-install | bash
@@ -63,15 +62,20 @@ jobs:
         run: |
           set -o pipefail
           PROMPT="$(printf '%s\n\nTarget URL: %s\nRequested actions: %s\n' \
-            'Use Playwright MCP to perform the requested read-only UI checks on the target below. Proceed only because the workflow requester confirmed authorization. Do not submit forms, change or delete data, make purchases, enter credentials or personal data, probe for vulnerabilities, or access unrelated destinations. If the requested actions require any of these, stop and report that they are outside this workflow scope. Summarize the observed results and report tool failures without guessing.' \
+            'Use the Playwright MCP tools to navigate to the target URL and perform the requested read-only UI checks. Proceed only because the workflow requester confirmed authorization. Do not submit forms, change or delete data, make purchases, enter credentials or personal data, probe for vulnerabilities, or access unrelated destinations. If the requested actions require any of these, stop and report that they are outside this workflow scope. Summarize the observed results and report tool failures without guessing.' \
             "$TARGET_URL" \
             "$REQUESTED_ACTIONS")"
 
           copilot \
             --agent="playwrightAgent" \
             --prompt "$PROMPT" \
-            --additional-mcp-config=@.agent-repo/.mcp.json \
-            --allow-tool='playwright(*)' \
+            --additional-mcp-config=@.mcp.json \
+            --allow-tool='playwright' \
             --deny-tool='write' \
             --deny-tool='shell' \
-            | tee -a "$GITHUB_STEP_SUMMARY"
+            | tee -a "$GITHUB_STEP_SUMMARY" "$RUNNER_TEMP/playwright-agent-output.txt"
+
+          if ! grep -Fq '(MCP: playwright)' "$RUNNER_TEMP/playwright-agent-output.txt"; then
+            echo 'Copilot CLI completed without invoking Playwright MCP.' | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
