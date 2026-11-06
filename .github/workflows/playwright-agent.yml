@@ -40,6 +40,7 @@ jobs:
           path: .agent-repo
           sparse-checkout: |
             .github/agents/playwrightAgent.md
+            .mcp.json
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -48,6 +49,9 @@ jobs:
 
       - name: Install GitHub Copilot CLI
         run: curl -fsSL https://gh.io/copilot-install | bash
+
+      - name: Set up uv for shared MCP servers
+        uses: astral-sh/setup-uv@v5
 
       - name: Prepare Playwright agent profile
         run: |
@@ -69,7 +73,7 @@ jobs:
           copilot \
             --agent="playwrightAgent" \
             --prompt "$PROMPT" \
-            --additional-mcp-config=@.mcp.json \
+            --additional-mcp-config=@.agent-repo/.mcp.json \
             --allow-tool='playwright' \
             --deny-tool='write' \
             --deny-tool='shell' \
